@@ -3,18 +3,20 @@ const express = require('express');
 const cors    = require('cors');
 
 const { initializeFirebase } = require('./config/firebase');
+const { initializeSupabase } = require('./config/supabase');
 
 // Rutas
 const authRoutes      = require('./routes/auth');
 const firestoreRoutes = require('./routes/firestore');
 const rtdbRoutes      = require('./routes/rtdb');
-// const storageRoutes   = require('./routes/storage'); // desactivado temporalmente
+const storageRoutes   = require('./routes/storage');
 const messagingRoutes = require('./routes/messaging');
 const chatsRoutes     = require('./routes/chats');
 const forosRoutes     = require('./routes/foros');
 
 // ── Inicializar Firebase ───────────────────────────────────────────────────────
 initializeFirebase();
+initializeSupabase();
 
 // ── Crear app Express ──────────────────────────────────────────────────────────
 const app  = express();
@@ -34,7 +36,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth',      authRoutes);
 app.use('/api/firestore', firestoreRoutes);
 app.use('/api/rtdb',      rtdbRoutes);
-// app.use('/api/storage',   storageRoutes); // desactivado temporalmente
+app.use('/api/storage',   storageRoutes);
 app.use('/api/messaging', messagingRoutes);
 app.use('/api/chats',     chatsRoutes);
 app.use('/api/foros',     forosRoutes);
