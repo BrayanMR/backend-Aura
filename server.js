@@ -32,6 +32,37 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ── Ruta de prueba Supabase ────────────────────────────────────────────────┐
+app.get('/api/test/supabase', async (req, res) => {
+  try {
+    const { getSupabase } = require('./config/supabase');
+    const supabase = getSupabase();
+    
+    // Intenta conectar con auth
+    const { error: authError } = await supabase.auth.getSession();
+    
+    if (authError) {
+      return res.status(500).json({ 
+        connected: false, 
+        error: '❌ Error al conectar',
+        details: authError.message 
+      });
+    }
+
+    res.json({ 
+      connected: true, 
+      message: '✅ Conectado a Supabase correctamente',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      connected: false, 
+      error: '❌ Error critico',
+      details: error.message 
+    });
+  }
+});
+
 // ── Rutas de la API ────────────────────────────────────────────────────────────
 app.use('/api/auth',      authRoutes);
 app.use('/api/firestore', firestoreRoutes);
