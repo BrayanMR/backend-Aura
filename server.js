@@ -13,7 +13,7 @@ const storageRoutes   = require('./routes/storage');
 const messagingRoutes = require('./routes/messaging');
 const chatsRoutes     = require('./routes/chats');
 const forosRoutes     = require('./routes/foros');
-
+const aiRoutes        = require('./routes/ai');
 // ── Inicializar Firebase ───────────────────────────────────────────────────────
 initializeFirebase();
 initializeSupabase();
@@ -71,7 +71,7 @@ app.use('/api/storage',   storageRoutes);
 app.use('/api/messaging', messagingRoutes);
 app.use('/api/chats',     chatsRoutes);
 app.use('/api/foros',     forosRoutes);
-
+app.use('/api/ai',        aiRoutes);
 // ── Manejador de errores global ────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error('❌ Error no manejado:', err);
@@ -90,6 +90,8 @@ if (require.main === module) {
     console.log(`   GET  http://localhost:${PORT}/api/rtdb/*path`);
     console.log(`   POST http://localhost:${PORT}/api/storage/upload`);
     console.log(`   POST http://localhost:${PORT}/api/messaging/send`);
+    console.log(`   POST http://localhost:${PORT}/api/ai/triage`);
+
   });
 }
 
