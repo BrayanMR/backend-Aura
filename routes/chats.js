@@ -68,10 +68,10 @@ router.post('/', async (req, res) => {
     const ref = await db.collection('Chats').add({
       Documento_usuario,
       Documento_psicologo,
-      nombre_psicologo: cleanString(req.body.nombrePsicologo),
-      nombre_usuario: cleanString(req.body.nombreUsuario),
       Fecha_inicio: new Date().toISOString(),
       Mensaje: '',
+      nombre_psicologo: req.body.nombrePsicologo,
+      nombre_usuario: req.body.nombreUsuario,
     });
 
     res.status(201).json({ id: ref.id });
