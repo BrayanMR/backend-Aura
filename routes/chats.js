@@ -65,13 +65,16 @@ router.post('/', async (req, res) => {
       return res.status(409).json({ error: 'Ya existe un chat entre estos participantes', id: existe.docs[0].id });
     }
 
+    const nombrePsicologo = req.body.nombre_psicologo ?? req.body.nombrePsicologo ?? '';
+    const nombreUsuario = req.body.nombre_usuario ?? req.body.nombreUsuario ?? '';
+
     const ref = await db.collection('Chats').add({
       Documento_usuario,
       Documento_psicologo,
       Fecha_inicio: new Date().toISOString(),
       Mensaje: '',
-      nombre_psicologo: req.body.nombrePsicologo,
-      nombre_usuario: req.body.nombreUsuario,
+      nombre_psicologo: nombrePsicologo,
+      nombre_usuario: nombreUsuario,
     });
 
     res.status(201).json({ id: ref.id });
