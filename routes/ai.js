@@ -15,7 +15,8 @@ function buildPrompt(message, conversationContext = [], conversationMemory = '')
     'Reglas:',
     '- Si detectas riesgo de autolesión, suicidio o peligro inmediato, category debe ser crisis y crisis=true.',
     '- Si no hay señales claras, usa general y crisis=false.',
-    '- reply debe sonar como una persona que acompaña, no como una plantilla.',
+    '- Piensa en problemas de escuela, trabajo, pareja, amistades, familia, duelo, soledad, autoestima, culpa, enojo, estrés, ansiedad, ataques de pánico, cansancio mental, sueño, dependencia emocional, rechazo, acoso, cambios en casa o violencia.',
+    '- reply debe sonar como una persona que acompaña, no como una plantilla ni como un sistema.',
     '- reply debe ser breve, empática, concreta y en español natural, cercano y joven.',
     '- No repitas ni paraphrasees literalmente el mensaje del usuario.',
     '- No digas cosas como "esto parece un tema familiar", "esto es ansiedad" o "suena a conflicto".',
@@ -24,6 +25,7 @@ function buildPrompt(message, conversationContext = [], conversationMemory = '')
     '- Usa el contexto reciente para responder con criterio y continuidad.',
     '- La reply debe incluir una observación humana sobre lo que siente la persona o una pregunta concreta para seguir.',
     '- Si el mensaje habla de golpes, maltrato o una agresión en casa, responde con prioridad de seguridad y pregunta si están a salvo ahora mismo.',
+    '- Si el usuario dice que quiere hablar con un psicólogo, con una persona o con alguien de apoyo, responde de forma directa y cálida, sin seguir dando vueltas.',
     '- recommendedSpecialty debe ser una especialidad de psicología útil para el caso.',
     '- memory debe ser un resumen corto y estable de lo importante que la app debe recordar sobre la persona.',
     '- memory no debe copiar el mensaje completo; debe guardar solo hechos, riesgos o contexto que sigan siendo útiles en el siguiente turno.',
@@ -109,6 +111,28 @@ function isTooSimilarReply(reply, message) {
 
 function buildFallbackReply(category, message) {
   const normalized = normalizeText(message);
+  const wantsHumanSupport =
+    normalized.includes('quiero hablar con una persona') ||
+    normalized.includes('quiero hablar con alguien') ||
+    normalized.includes('quiero hablar con un psicologo') ||
+    normalized.includes('quiero hablar con psicologo') ||
+    normalized.includes('quiero hablar con una psicologa') ||
+    normalized.includes('quiero hablar con psicologa') ||
+    normalized.includes('con una persona') ||
+    normalized.includes('con alguien') ||
+    normalized.includes('pasame con una persona') ||
+    normalized.includes('pasame con alguien') ||
+    normalized.includes('pasame con el psicologo') ||
+    normalized.includes('pasame con la psicologa') ||
+    normalized.includes('derivame con un psicologo') ||
+    normalized.includes('derivame con una persona') ||
+    normalized.includes('necesito una persona') ||
+    normalized.includes('necesito hablar con alguien');
+  const hasViolenceInHome =
+    (normalized.includes('padre') && normalized.includes('madre') &&
+      (normalized.includes('pega') || normalized.includes('golpea') || normalized.includes('maltrata') || normalized.includes('agrede'))) ||
+    (normalized.includes('papá') && normalized.includes('mamá') &&
+      (normalized.includes('pega') || normalized.includes('golpea') || normalized.includes('maltrata') || normalized.includes('agrede')));
 
   if (
     normalized.includes('me pegaron') ||
@@ -120,10 +144,13 @@ function buildFallbackReply(category, message) {
     normalized.includes('violencia') ||
     normalized.includes('abuso') ||
     normalized.includes('me agredieron') ||
-    (normalized.includes('padre') && normalized.includes('madre') &&
-      (normalized.includes('pega') || normalized.includes('golpea') || normalized.includes('maltrata') || normalized.includes('agrede')))
+    hasViolenceInHome
   ) {
     return 'Lo que cuentas es serio. Si ahora mismo hay golpes o riesgo en casa, busca a un adulto de confianza, sal a un lugar seguro si puedes y pide ayuda de inmediato. ¿Están a salvo ahora mismo?';
+  }
+
+  if (wantsHumanSupport) {
+    return 'Claro, te puedo orientar con un psicólogo. Si quieres, te ayudo a seguir por aquí y a la vez te conecto con apoyo humano para que no tengas que cargarlo solo/a.';
   }
 
   if (category === 'crisis') {
@@ -143,7 +170,11 @@ function buildFallbackReply(category, message) {
   }
 
   if (category === 'familiar') {
-    return 'Lo que pasa en tu casa suena duro. Dime qué ocurrió primero y si eso sigue pasando ahora, para ayudarte a pensar el siguiente paso sin darle vueltas de más.';
+    if (hasViolenceInHome) {
+      return 'Lo que cuentas es serio. Si ahora mismo hay golpes o riesgo en casa, busca a un adulto de confianza, sal a un lugar seguro si puedes y pide ayuda de inmediato. ¿Tu mamá está a salvo ahora mismo?';
+    }
+
+    return 'Lo que pasa en tu casa suena duro. Si quieres, dime qué ocurrió primero y qué es lo que más te preocupa ahora para ayudarte a ordenar el siguiente paso.';
   }
 
   if (category === 'sueno') {
@@ -151,15 +182,19 @@ function buildFallbackReply(category, message) {
   }
 
   if (normalized.includes('hola') || normalized.includes('buenas') || normalized.includes('buenos dias')) {
-    return 'Te leo. Cuéntame qué te trae por acá hoy y te respondo de forma más concreta.';
+    return 'Te leo. Cuéntame qué te trae por acá hoy y voy contigo paso a paso, sin responderte en automático.';
   }
 
   if (normalized.includes('mi papa') || normalized.includes('mi papá') || normalized.includes('mi mama') || normalized.includes('mi mamá') || normalized.includes('mis papás') || normalized.includes('mis papas')) {
-    if (normalized.includes('pega') || normalized.includes('golpea') || normalized.includes('maltrata') || normalized.includes('agrede')) {
-      return 'Lo que cuentas es serio. Si ahora mismo hay golpes o riesgo en casa, busca a un adulto de confianza, sal a un lugar seguro si puedes y pide ayuda de inmediato. ¿Están a salvo ahora mismo?';
+    if (hasViolenceInHome) {
+      return 'Lo que cuentas es serio. Si ahora mismo hay golpes o riesgo en casa, busca a un adulto de confianza, sal a un lugar seguro si puedes y pide ayuda de inmediato. ¿Tu mamá está a salvo ahora mismo?';
     }
 
-    return 'Lo que pasa en tu casa suena duro. Dime qué ocurrió primero y si eso sigue pasando ahora, para ayudarte a pensar el siguiente paso sin darle vueltas de más.';
+    return 'Lo que pasa en tu casa suena duro. Si quieres, dime qué ocurrió primero y qué es lo que más te pesa ahora para ayudarte a ordenar el siguiente paso.';
+  }
+
+  if (wantsHumanSupport) {
+    return 'Claro, te acompaño y te conecto con apoyo humano. Si quieres, seguimos por aquí mientras preparo la derivación.';
   }
 
   return 'Te leo. Cuéntame un poco más de lo que pasó y te respondo con algo más útil y directo.';
