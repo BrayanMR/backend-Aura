@@ -19,9 +19,11 @@ function buildPrompt(message, conversationContext = [], conversationMemory = '')
     '- reply debe ser breve, empática, concreta y en español natural, cercano y joven.',
     '- No repitas ni paraphrasees literalmente el mensaje del usuario.',
     '- No digas cosas como "esto parece un tema familiar", "esto es ansiedad" o "suena a conflicto".',
+    '- No expliques la situación con etiquetas; responde a lo que está pasando como si conversarás con una persona real.',
     '- No copies las palabras del usuario en la primera frase ni cierres con frases vacías.',
     '- Usa el contexto reciente para responder con criterio y continuidad.',
     '- La reply debe incluir una observación humana sobre lo que siente la persona o una pregunta concreta para seguir.',
+    '- Si el mensaje habla de golpes, maltrato o una agresión en casa, responde con prioridad de seguridad y pregunta si están a salvo ahora mismo.',
     '- recommendedSpecialty debe ser una especialidad de psicología útil para el caso.',
     '- memory debe ser un resumen corto y estable de lo importante que la app debe recordar sobre la persona.',
     '- memory no debe copiar el mensaje completo; debe guardar solo hechos, riesgos o contexto que sigan siendo útiles en el siguiente turno.',
@@ -117,9 +119,11 @@ function buildFallbackReply(category, message) {
     normalized.includes('me maltrataron') ||
     normalized.includes('violencia') ||
     normalized.includes('abuso') ||
-    normalized.includes('me agredieron')
+    normalized.includes('me agredieron') ||
+    (normalized.includes('padre') && normalized.includes('madre') &&
+      (normalized.includes('pega') || normalized.includes('golpea') || normalized.includes('maltrata') || normalized.includes('agrede')))
   ) {
-    return 'Eso no está bien y puede ser una situación de violencia. Si estás en peligro ahora, busca a un adulto de confianza, un familiar seguro, el orientador de tu colegio o emergencias. Si quieres, sigo contigo y te ayudo a decidir el siguiente paso sin juzgarte.';
+    return 'Lo que cuentas es serio. Si ahora mismo hay golpes o riesgo en casa, busca a un adulto de confianza, sal a un lugar seguro si puedes y pide ayuda de inmediato. ¿Están a salvo ahora mismo?';
   }
 
   if (category === 'crisis') {
@@ -139,7 +143,7 @@ function buildFallbackReply(category, message) {
   }
 
   if (category === 'familiar') {
-    return 'Lo de casa suena serio y no quiero minimizarlo. Cuéntame qué pasó primero y si ahora mismo alguien está en riesgo, para ayudarte a decidir qué hacer.';
+    return 'Lo que pasa en tu casa suena duro. Dime qué ocurrió primero y si eso sigue pasando ahora, para ayudarte a pensar el siguiente paso sin darle vueltas de más.';
   }
 
   if (category === 'sueno') {
@@ -150,8 +154,12 @@ function buildFallbackReply(category, message) {
     return 'Te leo. Cuéntame qué te trae por acá hoy y te respondo de forma más concreta.';
   }
 
-  if (normalized.includes('mi papá') || normalized.includes('mis papás') || normalized.includes('mi mama') || normalized.includes('mi mamá')) {
-    return 'Lo que cuentas en tu casa no lo voy a pasar por alto. Dime qué pasó exactamente y te ayudo a ver si ahora mismo hay que proteger a alguien o pedir apoyo.';
+  if (normalized.includes('mi papa') || normalized.includes('mi papá') || normalized.includes('mi mama') || normalized.includes('mi mamá') || normalized.includes('mis papás') || normalized.includes('mis papas')) {
+    if (normalized.includes('pega') || normalized.includes('golpea') || normalized.includes('maltrata') || normalized.includes('agrede')) {
+      return 'Lo que cuentas es serio. Si ahora mismo hay golpes o riesgo en casa, busca a un adulto de confianza, sal a un lugar seguro si puedes y pide ayuda de inmediato. ¿Están a salvo ahora mismo?';
+    }
+
+    return 'Lo que pasa en tu casa suena duro. Dime qué ocurrió primero y si eso sigue pasando ahora, para ayudarte a pensar el siguiente paso sin darle vueltas de más.';
   }
 
   return 'Te leo. Cuéntame un poco más de lo que pasó y te respondo con algo más útil y directo.';
