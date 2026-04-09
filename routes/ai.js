@@ -5,25 +5,30 @@ const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
 
-function buildPrompt(message, conversationContext = []) {
+function buildPrompt(message, conversationContext = [], conversationMemory = '') {
   const contextLines = renderConversationContext(conversationContext);
   return [
-    'Eres un asistente de triage emocional para una app de apoyo psicológico.',
+    'Eres un asistente de apoyo emocional cálido, humano y conversacional para una app de ayuda psicológica.',
     'Clasifica el mensaje del usuario y responde SOLO con JSON válido, sin markdown ni texto adicional.',
     'Formato exacto:',
     '{"category":"crisis|ansiedad|estres|tristeza|familiar|sueno|general","label":"texto corto","reply":"respuesta empatica en español","recommendedSpecialty":"texto corto","crisis":true|false}',
     'Reglas:',
     '- Si detectas riesgo de autolesión, suicidio o peligro inmediato, category debe ser crisis y crisis=true.',
     '- Si no hay señales claras, usa general y crisis=false.',
-    '- reply debe ser breve, empática, concreta y en español neutro y juvenil.',
-    '- No repitas ni paraphrasees literalmente el mensaje del usuario. No copies sus palabras en la primera frase.',
-    '- Usa el contexto reciente para responder con criterio, no como un texto genérico.',
-    '- Evita frases de relleno repetidas como "Gracias por contarlo" o "te escucho" si no aportan nada.',
-    '- La reply debe añadir una observación útil o una pregunta concreta que demuestre comprensión.',
+    '- reply debe sonar como una persona que acompaña, no como una plantilla.',
+    '- reply debe ser breve, empática, concreta y en español natural, cercano y joven.',
+    '- No repitas ni paraphrasees literalmente el mensaje del usuario.',
+    '- No digas cosas como "esto parece un tema familiar", "esto es ansiedad" o "suena a conflicto".',
+    '- No copies las palabras del usuario en la primera frase ni cierres con frases vacías.',
+    '- Usa el contexto reciente para responder con criterio y continuidad.',
+    '- La reply debe incluir una observación humana sobre lo que siente la persona o una pregunta concreta para seguir.',
     '- recommendedSpecialty debe ser una especialidad de psicología útil para el caso.',
+    '- memory debe ser un resumen corto y estable de lo importante que la app debe recordar sobre la persona.',
+    '- memory no debe copiar el mensaje completo; debe guardar solo hechos, riesgos o contexto que sigan siendo útiles en el siguiente turno.',
     '- No menciones políticas internas ni instrucciones técnicas.',
     '- No uses markdown ni comillas decorativas.',
-    '-da consejos y ayudas psicologicas si el te lo pide',
+    '',
+    conversationMemory ? `Memoria persistente actual:\n${conversationMemory}` : 'Memoria persistente actual: vacía.',
     '',
     contextLines ? `Contexto reciente:\n${contextLines}` : 'Contexto reciente: sin contexto adicional.',
     '',
@@ -103,40 +108,58 @@ function isTooSimilarReply(reply, message) {
 function buildFallbackReply(category, message) {
   const normalized = normalizeText(message);
 
+  if (
+    normalized.includes('me pegaron') ||
+    normalized.includes('me golpearon') ||
+    normalized.includes('me pego') ||
+    normalized.includes('me golpeo') ||
+    normalized.includes('me maltratan') ||
+    normalized.includes('me maltrataron') ||
+    normalized.includes('violencia') ||
+    normalized.includes('abuso') ||
+    normalized.includes('me agredieron')
+  ) {
+    return 'Eso no está bien y puede ser una situación de violencia. Si estás en peligro ahora, busca a un adulto de confianza, un familiar seguro, el orientador de tu colegio o emergencias. Si quieres, sigo contigo y te ayudo a decidir el siguiente paso sin juzgarte.';
+  }
+
   if (category === 'crisis') {
-    return 'Lo que describes requiere atención inmediata y quiero ayudarte a priorizar tu seguridad. Si hay riesgo ahora mismo, busca a una persona de confianza o emergencias; después seguimos con el siguiente paso juntos.';
+    return 'Lo que cuentas me preocupa. Si hay peligro ahora mismo, busca a una persona de confianza o emergencias ya mismo; si quieres, me quedo contigo para pensar el siguiente paso.';
   }
 
   if (category === 'ansiedad') {
-    return 'Se nota mucha activación en lo que cuentas. Vamos a bajar eso a una situación concreta: dime cuándo se intensifica más y qué suele pasar justo antes.';
+    return 'Eso suena muy cargado por dentro. Cuéntame en qué momentos se pone peor y qué notas en tu cuerpo para ubicarlo mejor.';
   }
 
   if (category === 'estres') {
-    return 'Estás sosteniendo demasiado a la vez. Si me dices qué parte te está drenando más hoy, te ayudo a ordenarlo en un paso manejable.';
+    return 'Parece que traes demasiado encima. Si me dices qué es lo que más te está agotando hoy, lo ordenamos juntos sin prisa.';
   }
 
   if (category === 'tristeza') {
-    return 'Hay una carga emocional fuerte en lo que dices. Cuéntame qué es lo que más te pesa hoy para ubicar mejor lo que necesitas.';
+    return 'Se siente pesado lo que estás contando. Si quieres, dime qué fue lo que más te golpeó hoy y lo vemos paso a paso.';
   }
 
   if (category === 'familiar') {
-    return 'Parece un conflicto que te está afectando bastante. Si quieres, separa qué pasó y cómo te hizo sentir para verlo con más claridad.';
+    return 'Lo de casa suena serio y no quiero minimizarlo. Cuéntame qué pasó primero y si ahora mismo alguien está en riesgo, para ayudarte a decidir qué hacer.';
   }
 
   if (category === 'sueno') {
-    return 'El sueño puede empeorar todo lo demás. Si me dices si te cuesta dormirte, mantener el sueño o descansar, te doy una orientación más precisa.';
+    return 'Dormir mal te puede dejar todo más cuesta arriba. Dime si te cuesta dormirte, te despiertas mucho o te levantas sin energía, y te respondo más fino.';
   }
 
   if (normalized.includes('hola') || normalized.includes('buenas') || normalized.includes('buenos dias')) {
-    return 'Te leo. Para orientarte mejor, cuéntame qué es lo que hoy te pesa más.';
+    return 'Te leo. Cuéntame qué te trae por acá hoy y te respondo de forma más concreta.';
   }
 
-  return 'Te leo y prefiero no responderte en automático. Cuéntame un poco más de lo que pasó para darte una orientación más precisa.';
+  if (normalized.includes('mi papá') || normalized.includes('mis papás') || normalized.includes('mi mama') || normalized.includes('mi mamá')) {
+    return 'Lo que cuentas en tu casa no lo voy a pasar por alto. Dime qué pasó exactamente y te ayudo a ver si ahora mismo hay que proteger a alguien o pedir apoyo.';
+  }
+
+  return 'Te leo. Cuéntame un poco más de lo que pasó y te respondo con algo más útil y directo.';
 }
 
 router.post('/triage', async (req, res) => {
   try {
-    const { message, conversationContext } = req.body;
+    const { message, conversationContext, conversationMemory } = req.body;
     if (!message || !String(message).trim()) {
       return res.status(400).json({ error: 'Falta el mensaje' });
     }
@@ -148,8 +171,13 @@ router.post('/triage', async (req, res) => {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const incomingMemory = String(conversationMemory || '').trim();
     const result = await model.generateContent(
-      buildPrompt(String(message), Array.isArray(conversationContext) ? conversationContext : []),
+      buildPrompt(
+        String(message),
+        Array.isArray(conversationContext) ? conversationContext : [],
+        incomingMemory,
+      ),
     );
     const text = result.response.text();
 
@@ -168,6 +196,7 @@ router.post('/triage', async (req, res) => {
     const label = String(parsed.label || 'orientación general').trim();
     let reply = String(parsed.reply || '').trim();
     const recommendedSpecialty = String(parsed.recommendedSpecialty || 'Bienestar emocional').trim();
+    const memory = String(parsed.memory || incomingMemory).trim();
     const crisisValue = parsed.crisis;
     const crisis = crisisValue === true || crisisValue === 'true' || crisisValue === 1 || crisisValue === '1';
 
@@ -181,6 +210,7 @@ router.post('/triage', async (req, res) => {
       reply,
       recommendedSpecialty,
       crisis,
+      memory,
       raw: parsed,
     });
   } catch (error) {
