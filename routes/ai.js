@@ -261,4 +261,19 @@ router.post('/triage', async (req, res) => {
   }
 });
 
+// Ruta temporal para listar modelos disponibles de Gemini
+router.get('/list-gemini-models', async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY no está configurada' });
+    }
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const models = await genAI.listModels();
+    res.json(models);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
