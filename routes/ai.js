@@ -185,28 +185,60 @@ function summarizeRecentUserContext(conversationContext = []) {
     .map((entry) => String((entry && entry.text) || '').trim())
     .filter(Boolean);
 
-  if (userMessages.length === 0) return '';
+  const filteredMessages = userMessages.filter((msg) => !isSummaryIntent(msg));
 
-  return userMessages
+  if (filteredMessages.length === 0) return '';
+
+  return filteredMessages
     .slice(-2)
     .map((msg) => msg.length > 100 ? `${msg.slice(0, 100)}...` : msg)
     .join(' | ');
 }
 
 function buildSummaryReply(conversationContext = [], conversationMemory = '') {
-  const memorySummary = summarizeMemoryLines(conversationMemory);
+  const memoryLines = String(conversationMemory || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.toLowerCase().startsWith('perfil:'));
+
+  const hasUsefulMemory = memoryLines.some((line) => !line.toLowerCase().startsWith('ultimo tema:'));
+  const cleanMemoryLines = hasUsefulMemory
+    ? memoryLines.filter((line) => !line.toLowerCase().startsWith('ultimo tema:'))
+    : memoryLines;
+
+  const memorySummary = cleanMemoryLines.slice(0, 3).join('; ');
   const contextSummary = summarizeRecentUserContext(conversationContext);
+  const combined = `${memorySummary.toLowerCase()} ${contextSummary.toLowerCase()}`;
+  const hasFamilyContext =
+    combined.includes('familiar') ||
+    combined.includes('mama') ||
+    combined.includes('papá') ||
+    combined.includes('papa') ||
+    combined.includes('casa');
+  const hasViolenceContext =
+    combined.includes('violencia') ||
+    combined.includes('maltrato') ||
+    combined.includes('golpe') ||
+    combined.includes('agred');
+  const hasNightContext = combined.includes('noche');
+  const intro = (hasFamilyContext || hasViolenceContext)
+    ? 'Sí, me acuerdo. Sé que este tema te duele.'
+    : 'Sí, me acuerdo de lo que venimos hablando.';
 
   if (!memorySummary && !contextSummary) {
     return 'Puedo resumirte mejor si me dices de cuál parte quieres el resumen: lo familiar, cómo te has sentido, o lo último que hablamos .';
   }
 
   if (memorySummary && contextSummary) {
-    return `Claro. Resumen rápido: ${memorySummary}. Además, lo más reciente que me contaste fue: ${contextSummary}. Si quieres, te lo ordeno en 3 pasos concretos para hoy.`;
+    const followUp = hasNightContext
+      ? 'Si quieres, retomemos desde esa noche: ¿qué fue lo más difícil para ti en ese momento?'
+      : 'Si quieres, retomemos por la parte que más te pesa ahora para ayudarte con algo concreto.';
+    return `${intro} En resumen, me contaste: ${memorySummary}. Lo último que mencionaste fue: ${contextSummary}. ${followUp}`;
   }
 
   const base = memorySummary || contextSummary;
-  return `Claro. Resumen rápido: ${base}. Si quieres, te lo convierto en un plan corto para hoy.`;
+  return `${intro} En resumen, me contaste: ${base}. Si quieres, lo bajamos a un siguiente paso concreto para hoy.`;
 }
 
 function buildFallbackReply(category, message, conversationContext = [], conversationMemory = '') {
