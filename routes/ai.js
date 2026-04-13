@@ -149,6 +149,65 @@ function isGenericReplyText(reply) {
   return genericPatterns.some((pattern) => normalized.includes(pattern));
 }
 
+function isSummaryIntent(message) {
+  const normalized = normalizeText(message);
+  return (
+    normalized.includes('resumen') ||
+    normalized.includes('resumir') ||
+    normalized.includes('resumeme') ||
+    normalized.includes('resumeme') ||
+    normalized.includes('hazme un resumen') ||
+    normalized.includes('resume lo que') ||
+    normalized.includes('que te conte') ||
+    normalized.includes('que te dije')
+  );
+}
+
+function summarizeMemoryLines(conversationMemory = '') {
+  const lines = String(conversationMemory || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.toLowerCase().startsWith('perfil:'));
+
+  return lines.slice(0, 3).join('; ');
+}
+
+function summarizeRecentUserContext(conversationContext = []) {
+  if (!Array.isArray(conversationContext)) return '';
+
+  const userMessages = conversationContext
+    .filter((entry) => {
+      const role = String((entry && entry.role) || '').toLowerCase();
+      return role === 'user';
+    })
+    .map((entry) => String((entry && entry.text) || '').trim())
+    .filter(Boolean);
+
+  if (userMessages.length === 0) return '';
+
+  return userMessages
+    .slice(-2)
+    .map((msg) => msg.length > 100 ? `${msg.slice(0, 100)}...` : msg)
+    .join(' | ');
+}
+
+function buildSummaryReply(conversationContext = [], conversationMemory = '') {
+  const memorySummary = summarizeMemoryLines(conversationMemory);
+  const contextSummary = summarizeRecentUserContext(conversationContext);
+
+  if (!memorySummary && !contextSummary) {
+    return 'Puedo resumirte mejor si me dices de cuál parte quieres el resumen: lo familiar, cómo te has sentido, o lo último que hablamos.';
+  }
+
+  if (memorySummary && contextSummary) {
+    return `Claro. Resumen rápido: ${memorySummary}. Además, lo más reciente que me contaste fue: ${contextSummary}. Si quieres, te lo ordeno en 3 pasos concretos para hoy.`;
+  }
+
+  const base = memorySummary || contextSummary;
+  return `Claro. Resumen rápido: ${base}. Si quieres, te lo convierto en un plan corto para hoy.`;
+}
+
 function buildFallbackReply(category, message, conversationContext = [], conversationMemory = '') {
   const normalized = normalizeText(message);
   const wantsHumanSupport =
@@ -191,6 +250,10 @@ function buildFallbackReply(category, message, conversationContext = [], convers
 
   if (wantsHumanSupport) {
     return 'Claro, te puedo orientar con un psicólogo. Si quieres, te ayudo a seguir por aquí y a la vez te conecto con apoyo humano para que no tengas que cargarlo solo/a.';
+  }
+
+  if (isSummaryIntent(message)) {
+    return buildSummaryReply(conversationContext, conversationMemory);
   }
 
   if (isMemoryRecallIntent(message) && hasUsableContext(conversationContext, conversationMemory)) {
