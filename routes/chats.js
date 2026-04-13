@@ -85,18 +85,51 @@ router.post('/', async (req, res) => {
 
 // ── Enviar mensaje (actualizar último mensaje del chat) ────────────────────────
 // PATCH /api/chats/:chatId/mensaje
-// Body: { Mensaje }
+// Body: { Mensaje } or { mensaje } or { texto, autor, autorUid, fecha }
 router.patch('/:chatId/mensaje', async (req, res) => {
   try {
-    const { Mensaje } = req.body;
-    if (!Mensaje) return res.status(400).json({ error: 'Falta el campo Mensaje' });
+    const db = getFirestore();
+    const chatRef = db.collection('Chats').doc(req.params.chatId);
+    const chatSnap = await chatRef.get();
 
-    await getFirestore().collection('Chats').doc(req.params.chatId).update({
-      Mensaje,
+    if (!chatSnap.exists) {
+      return res.status(404).json({ error: 'Chat no encontrado' });
+    }
+
+    const body = req.body || {};
+    const texto = String(body.Mensaje ?? body.mensaje ?? body.texto ?? '').trim();
+    if (!texto) {
+      return res.status(400).json({ error: 'Falta el campo Mensaje' });
+    }
+
+    const autor = String(body.autor ?? '').trim();
+    const autorUid = String(body.autorUid ?? body.autor_uid ?? '').trim();
+    const fecha = String(body.fecha ?? body.createdAt ?? new Date().toISOString());
+
+    const nuevoMensaje = {
+      texto,
+      autor,
+      autorUid,
+      fecha,
+    };
+
+    const currentData = chatSnap.data() || {};
+    const mensajesActuales = Array.isArray(currentData.Mensajes) ? currentData.Mensajes : [];
+    const mensajesActualizados = [...mensajesActuales, nuevoMensaje];
+
+    await chatRef.update({
+      Mensajes: mensajesActualizados,
+      Mensaje: texto,
+      UltimoAutorUid: autorUid || currentData.UltimoAutorUid || '',
       updatedAt: new Date().toISOString(),
     });
 
-    res.json({ updated: true });
+    res.json({
+      updated: true,
+      id: chatRef.id,
+      Mensaje: texto,
+      Mensajes: mensajesActualizados,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
