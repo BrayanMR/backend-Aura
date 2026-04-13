@@ -197,7 +197,7 @@ function buildSummaryReply(conversationContext = [], conversationMemory = '') {
   const contextSummary = summarizeRecentUserContext(conversationContext);
 
   if (!memorySummary && !contextSummary) {
-    return 'Puedo resumirte mejor si me dices de cuál parte quieres el resumen: lo familiar, cómo te has sentido, o lo último que hablamos.';
+    return 'Puedo resumirte mejor si me dices de cuál parte quieres el resumen: lo familiar, cómo te has sentido, o lo último que hablamos .';
   }
 
   if (memorySummary && contextSummary) {
