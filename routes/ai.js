@@ -241,7 +241,18 @@ function isOutOfScopeIntent(message) {
 }
 
 function buildOutOfScopeReply() {
-  return 'Oye, solo estoy para ayudarte con temas psicológicos, traumas y temas familiares. Si quieres, cuéntame cómo te sientes o qué te preocupa y ahí sí te acompaño.';
+  return pickVariant([
+    'Oye, solo estoy para ayudarte con temas psicológicos, traumas y temas familiares. Si quieres, cuéntame cómo te sientes o qué te preocupa y ahí sí te acompaño.',
+    'Ese tema se sale de mi enfoque. Yo te apoyo en temas psicológicos, traumas y familia. Si quieres, dime cómo te estás sintiendo y lo vemos juntos.',
+    'No soy para deportes o temas generales; estoy para acompañarte en lo emocional, traumas y familia. Si quieres, seguimos por ahí.',
+  ], 'out_of_scope');
+}
+
+function pickVariant(options, seed = '') {
+  if (!Array.isArray(options) || options.length === 0) return '';
+  const normalizedSeed = normalizeText(seed);
+  const hash = Array.from(normalizedSeed).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return options[hash % options.length];
 }
 
 function summarizeMemoryLines(conversationMemory = '') {
@@ -424,7 +435,11 @@ function buildFallbackReply(category, message, conversationContext = [], convers
     return 'Claro, te acompaño y te conecto con apoyo humano. Si quieres, seguimos por aquí mientras preparo la derivación.';
   }
 
-  return 'Te leo. Cuéntame un poco más de lo que pasó y te respondo con algo más útil y directo.';
+  return pickVariant([
+    'Te leo. Cuéntame un poco más de lo que pasó y te respondo con algo más útil y directo.',
+    'Estoy contigo. Si me das un poco más de contexto, te respondo de forma más concreta.',
+    'Gracias por abrir el tema. Cuéntame un poco más para ayudarte con algo realmente útil.',
+  ], `${category}|${message}`);
 }
 
 function detectLocalCategory(message) {
