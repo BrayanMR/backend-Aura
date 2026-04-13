@@ -156,6 +156,7 @@ function isSummaryIntent(message) {
     normalized.includes('resumir') ||
     normalized.includes('resumeme') ||
     normalized.includes('resumeme') ||
+    normalized.includes('resumeme') ||
     normalized.includes('hazme un resumen') ||
     normalized.includes('resume lo que') ||
     normalized.includes('que te conte') ||
@@ -429,6 +430,14 @@ router.post('/triage', async (req, res) => {
     const memory = String(parsed.memory || incomingMemory).trim();
     const crisisValue = parsed.crisis;
     const crisis = crisisValue === true || crisisValue === 'true' || crisisValue === 1 || crisisValue === '1';
+    const summaryIntent = isSummaryIntent(String(message));
+
+    if (summaryIntent) {
+      reply = buildSummaryReply(
+        Array.isArray(conversationContext) ? conversationContext : [],
+        incomingMemory,
+      );
+    }
 
     if (!reply || isTooSimilarReply(reply, String(message)) || isGenericReplyText(reply)) {
       reply = buildFallbackReply(
