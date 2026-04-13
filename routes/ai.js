@@ -113,7 +113,43 @@ function isTooSimilarReply(reply, message) {
   return overlap / messageWords.size >= 0.6;
 }
 
-function buildFallbackReply(category, message) {
+function isMemoryRecallIntent(message) {
+  const normalized = normalizeText(message);
+  return (
+    normalized.includes('te acuerdas') ||
+    normalized.includes('recuerdas') ||
+    normalized.includes('recordas') ||
+    normalized.includes('hablabamos') ||
+    normalized.includes('hablamos') ||
+    normalized.includes('del tema') ||
+    normalized.includes('lo que te dije')
+  );
+}
+
+function hasUsableContext(conversationContext = [], conversationMemory = '') {
+  const memory = String(conversationMemory || '').trim();
+  if (memory.length >= 12) return true;
+  if (!Array.isArray(conversationContext)) return false;
+  return conversationContext.some((entry) => {
+    const text = String((entry && entry.text) || '').trim();
+    return text.length >= 8;
+  });
+}
+
+function isGenericReplyText(reply) {
+  const normalized = normalizeText(reply);
+  if (!normalized) return true;
+  const genericPatterns = [
+    'te leo',
+    'cuentame un poco mas',
+    'cuentame que te trae por aca',
+    'te respondo con algo mas util',
+    'paso a paso',
+  ];
+  return genericPatterns.some((pattern) => normalized.includes(pattern));
+}
+
+function buildFallbackReply(category, message, conversationContext = [], conversationMemory = '') {
   const normalized = normalizeText(message);
   const wantsHumanSupport =
     normalized.includes('quiero hablar con una persona') ||
@@ -157,6 +193,10 @@ function buildFallbackReply(category, message) {
     return 'Claro, te puedo orientar con un psicólogo. Si quieres, te ayudo a seguir por aquí y a la vez te conecto con apoyo humano para que no tengas que cargarlo solo/a.';
   }
 
+  if (isMemoryRecallIntent(message) && hasUsableContext(conversationContext, conversationMemory)) {
+    return 'Sí, me acuerdo de lo que veníamos hablando. Si quieres, retomemos desde lo último que te estaba pesando para ayudarte con algo concreto ahora mismo.';
+  }
+
   if (category === 'crisis') {
     return 'Lo que cuentas me preocupa. Si hay peligro ahora mismo, busca a una persona de confianza o emergencias ya mismo; si quieres, me quedo contigo para pensar el siguiente paso.';
   }
@@ -186,6 +226,9 @@ function buildFallbackReply(category, message) {
   }
 
   if (normalized.includes('hola') || normalized.includes('buenas') || normalized.includes('buenos dias')) {
+    if (hasUsableContext(conversationContext, conversationMemory)) {
+      return 'Hola. Te sigo el hilo; si quieres retomamos lo último que venías trabajando y vemos qué cambió hoy.';
+    }
     return 'Te leo. Cuéntame qué te trae por acá hoy y voy contigo paso a paso, sin responderte en automático.';
   }
 
@@ -303,7 +346,12 @@ router.post('/triage', async (req, res) => {
       return res.json({
         category: localCategory,
         label: localCategory === 'general' ? 'orientación general' : localCategory,
-        reply: buildFallbackReply(localCategory, String(message)),
+          reply: buildFallbackReply(
+            localCategory,
+            String(message),
+            Array.isArray(conversationContext) ? conversationContext : [],
+            incomingMemory,
+          ),
         recommendedSpecialty: localCategory === 'crisis' ? 'Crisis y contención' : 'Bienestar emocional',
         crisis: localCategory === 'crisis',
         memory: incomingMemory,
@@ -319,8 +367,13 @@ router.post('/triage', async (req, res) => {
     const crisisValue = parsed.crisis;
     const crisis = crisisValue === true || crisisValue === 'true' || crisisValue === 1 || crisisValue === '1';
 
-    if (!reply || isTooSimilarReply(reply, String(message))) {
-      reply = buildFallbackReply(category, String(message));
+    if (!reply || isTooSimilarReply(reply, String(message)) || isGenericReplyText(reply)) {
+      reply = buildFallbackReply(
+        category,
+        String(message),
+        Array.isArray(conversationContext) ? conversationContext : [],
+        incomingMemory,
+      );
     }
 
     return res.json({
@@ -334,15 +387,19 @@ router.post('/triage', async (req, res) => {
     });
   } catch (error) {
     const message = String(req.body?.message || '');
+    const conversationContext = Array.isArray(req.body?.conversationContext)
+      ? req.body.conversationContext
+      : [];
+    const conversationMemory = String(req.body?.conversationMemory || '').trim();
     const localCategory = detectLocalCategory(message);
     console.error('[AI][TRIAGE][FALLBACK]', error.message);
     return res.json({
       category: localCategory,
       label: localCategory === 'general' ? 'orientación general' : localCategory,
-      reply: buildFallbackReply(localCategory, message),
+      reply: buildFallbackReply(localCategory, message, conversationContext, conversationMemory),
       recommendedSpecialty: localCategory === 'crisis' ? 'Crisis y contención' : 'Bienestar emocional',
       crisis: localCategory === 'crisis',
-      memory: String(req.body?.conversationMemory || '').trim(),
+      memory: conversationMemory,
       raw: { fallback: true, error: error.message },
     });
   }
