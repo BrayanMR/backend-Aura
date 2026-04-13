@@ -200,6 +200,67 @@ function buildFallbackReply(category, message) {
   return 'Te leo. Cuéntame un poco más de lo que pasó y te respondo con algo más útil y directo.';
 }
 
+function detectLocalCategory(message) {
+  const normalized = normalizeText(message);
+
+  if (
+    normalized.includes('suicid') ||
+    normalized.includes('matarme') ||
+    normalized.includes('hacerme daño') ||
+    normalized.includes('hacerme dano') ||
+    normalized.includes('golpe') ||
+    normalized.includes('violencia') ||
+    normalized.includes('abuso')
+  ) {
+    return 'crisis';
+  }
+
+  if (
+    normalized.includes('ansiedad') ||
+    normalized.includes('nervios') ||
+    normalized.includes('pánico') ||
+    normalized.includes('panico')
+  ) {
+    return 'ansiedad';
+  }
+
+  if (
+    normalized.includes('estres') ||
+    normalized.includes('estres') ||
+    normalized.includes('agotado') ||
+    normalized.includes('presion') ||
+    normalized.includes('presión')
+  ) {
+    return 'estres';
+  }
+
+  if (normalized.includes('triste') || normalized.includes('deprim') || normalized.includes('llorar')) {
+    return 'tristeza';
+  }
+
+  if (
+    normalized.includes('familia') ||
+    normalized.includes('casa') ||
+    normalized.includes('papá') ||
+    normalized.includes('papa') ||
+    normalized.includes('mamá') ||
+    normalized.includes('mama')
+  ) {
+    return 'familiar';
+  }
+
+  if (
+    normalized.includes('dorm') ||
+    normalized.includes('sueño') ||
+    normalized.includes('sueno') ||
+    normalized.includes('insomnio')
+  ) {
+    return 'sueno';
+  }
+
+  return 'general';
+}
+
 router.post('/triage', async (req, res) => {
   try {
     const { message, conversationContext, conversationMemory } = req.body;
@@ -234,7 +295,16 @@ router.post('/triage', async (req, res) => {
     }
 
     if (!parsed || typeof parsed !== 'object') {
-      return res.status(502).json({ error: 'Gemini no devolvió JSON válido' });
+      const localCategory = detectLocalCategory(message);
+      return res.json({
+        category: localCategory,
+        label: localCategory === 'general' ? 'orientación general' : localCategory,
+        reply: buildFallbackReply(localCategory, String(message)),
+        recommendedSpecialty: localCategory === 'crisis' ? 'Crisis y contención' : 'Bienestar emocional',
+        crisis: localCategory === 'crisis',
+        memory: incomingMemory,
+        raw: { fallback: true, reason: 'Gemini no devolvió JSON válido' },
+      });
     }
 
     const category = String(parsed.category || 'general').trim();
@@ -259,7 +329,18 @@ router.post('/triage', async (req, res) => {
       raw: parsed,
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    const message = String(req.body?.message || '');
+    const localCategory = detectLocalCategory(message);
+    console.error('[AI][TRIAGE][FALLBACK]', error.message);
+    return res.json({
+      category: localCategory,
+      label: localCategory === 'general' ? 'orientación general' : localCategory,
+      reply: buildFallbackReply(localCategory, message),
+      recommendedSpecialty: localCategory === 'crisis' ? 'Crisis y contención' : 'Bienestar emocional',
+      crisis: localCategory === 'crisis',
+      memory: String(req.body?.conversationMemory || '').trim(),
+      raw: { fallback: true, error: error.message },
+    });
   }
 });
 

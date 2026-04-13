@@ -2,22 +2,33 @@
 const jwt = require('jsonwebtoken');
 
 /**
- * * Uso: agrega este middleware en las rutas que requieran autenticación
- *   router.get('/privado', authMiddleware, (req, res) => { ... })
+ * Middleware de autenticación: verifica JWT tokens
+ * Usa: router.get('/privado', authMiddleware, (req, res) => { ... })
  */
 function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Token no proporcionado' });
-  }
-
-  const token = authHeader.split('Bearer ')[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'mi_clave_secreta');
-    req.user = decoded; // uid, email, etc. disponibles en los controladores
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Token no proporcionado' });
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    const secret = process.env.JWT_SECRET || 'mi_clave_secreta';
+    
+    // Verificar JWT
+    const decoded = jwt.verify(token, secret);
+    req.user = {
+      uid: decoded.uid,
+      email: decoded.email,
+      ...decoded,
+    };
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Token inválido o expirado' });
+    console.error('[AUTH][ERROR]', err.message);
+    return res.status(401).json({ 
+      error: 'Token inválido o expirado',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined,
+    });
   }
 }
 
