@@ -46,12 +46,18 @@ router.post('/:collection', async (req, res) => {
 // Body: { ...campos }
 router.put('/:collection/:docId', async (req, res) => {
   try {
+    console.log('🔥 [PUT] Guardando en Firestore:', {
+      collection: req.params.collection,
+      docId: req.params.docId,
+      body: req.body,
+    });
     await getFirestore().collection(req.params.collection).doc(req.params.docId).set({
       ...req.body,
       updatedAt: new Date().toISOString(),
     });
     res.json({ id: req.params.docId });
   } catch (error) {
+    console.error('❌ [PUT] Error guardando en Firestore:', error);
     res.status(500).json({ error: error.message });
   }
 });

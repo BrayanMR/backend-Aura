@@ -78,6 +78,9 @@ router.post('/custom-token', async (req, res) => {
 // ── Login ──────────────────────────────────────────────────────────────────
 // POST /api/auth/login
 // Body: { email, password }
+
+const jwt = require('jsonwebtoken');
+
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -133,7 +136,13 @@ router.post('/login', async (req, res) => {
     }
     
     console.log('✅ Login exitoso');
-    res.json({ uid: user.uid, email: user.email });
+    // Generar token JWT
+    const token = jwt.sign(
+      { uid: user.uid, email: user.email },
+      process.env.JWT_SECRET || 'mi_clave_secreta', // Usa variable de entorno o valor por defecto
+      { expiresIn: '7d' }
+    );
+    res.json({ token, uid: user.uid, email: user.email });
   } catch (error) {
     console.error('❌ Error en login:', error.message);
     if (error.code === 'auth/user-not-found') {
