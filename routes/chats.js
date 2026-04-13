@@ -103,7 +103,7 @@ router.patch('/:chatId/mensaje', async (req, res) => {
     }
 
     const autor = String(body.autor ?? '').trim();
-    const autorUid = String(body.autorUid ?? body.autor_uid ?? '').trim();
+    const autorUid = String(body.autorUid ?? body.autor_uid ?? req.user?.uid ?? '').trim();
     const fecha = String(body.fecha ?? body.createdAt ?? new Date().toISOString());
 
     const nuevoMensaje = {
@@ -115,6 +115,36 @@ router.patch('/:chatId/mensaje', async (req, res) => {
 
     const currentData = chatSnap.data() || {};
     const mensajesActuales = Array.isArray(currentData.Mensajes) ? currentData.Mensajes : [];
+
+    const last = mensajesActuales.length > 0 ? mensajesActuales[mensajesActuales.length - 1] : null;
+    if (last && typeof last === 'object') {
+      const lastText = String(last.texto ?? last.Mensaje ?? '').trim().toLowerCase();
+      const lastUid = String(last.autorUid ?? '').trim();
+      const lastRole = String(last.autor ?? '').trim();
+      const lastDateRaw = String(last.fecha ?? last.timestamp ?? last.Fecha ?? '').trim();
+      const lastDate = lastDateRaw ? new Date(lastDateRaw) : null;
+      const currentDate = fecha ? new Date(fecha) : new Date();
+
+      const sameText = lastText === texto.toLowerCase();
+      const sameAuthor =
+        (autorUid && lastUid && autorUid === lastUid) ||
+        (!autorUid && !lastUid && autor && lastRole && autor === lastRole);
+      const closeInTime =
+        lastDate instanceof Date && !Number.isNaN(lastDate.getTime())
+          ? Math.abs(currentDate.getTime() - lastDate.getTime()) <= 10000
+          : false;
+
+      if (sameText && sameAuthor && closeInTime) {
+        return res.json({
+          updated: true,
+          id: chatRef.id,
+          Mensaje: texto,
+          Mensajes: mensajesActuales,
+          deduped: true,
+        });
+      }
+    }
+
     const mensajesActualizados = [...mensajesActuales, nuevoMensaje];
 
     await chatRef.update({
