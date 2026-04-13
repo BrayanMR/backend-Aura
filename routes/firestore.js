@@ -18,8 +18,23 @@ router.get('/:collection', async (req, res) => {
 // GET /api/firestore/:collection/:docId
 router.get('/:collection/:docId', async (req, res) => {
   try {
-    const doc = await getFirestore().collection(req.params.collection).doc(req.params.docId).get();
-    if (!doc.exists) return res.status(404).json({ error: 'Documento no encontrado' });
+    const { collection, docId } = req.params;
+    const ref = getFirestore().collection(collection).doc(docId);
+    const doc = await ref.get();
+    if (!doc.exists) {
+      // Solo crear automáticamente si es la colección chatIa
+      if (collection === 'chatIa') {
+        const emptyData = {
+          messages: [],
+          memory: '',
+          updatedAt: new Date().toISOString(),
+        };
+        await ref.set(emptyData);
+        return res.json({ id: docId, ...emptyData });
+      } else {
+        return res.status(404).json({ error: 'Documento no encontrado' });
+      }
+    }
     res.json({ id: doc.id, ...doc.data() });
   } catch (error) {
     res.status(500).json({ error: error.message });
