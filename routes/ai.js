@@ -26,6 +26,7 @@ function buildPrompt(message, conversationContext = [], conversationMemory = '')
     '- La reply debe incluir una observación humana sobre lo que siente la persona o una pregunta concreta para seguir.',
     '- Si el mensaje habla de golpes, maltrato o una agresión en casa, responde con prioridad de seguridad y pregunta si están a salvo ahora mismo.',
     '- Si el usuario dice que quiere hablar con un psicólogo, con una persona o con alguien de apoyo, responde de forma directa y cálida, sin seguir dando vueltas.',
+    '- Si el mensaje es claramente de deportes, clima, noticias, política, videojuegos, música o cualquier tema que no sea psicológico, de trauma o familiar, responde que solo ayudas con esos temas y redirige con calma.',
     '- recommendedSpecialty debe ser una especialidad de psicología útil para el caso.',
     '- memory debe ser un perfil persistente de este mismo usuario, no un resumen genérico.',
     '- memory debe incluir solo hechos estables y útiles: nombre o apodo si aparece, cómo prefiere ser tratado, temas recurrentes, contexto familiar/escolar/laboral, riesgos, cosas que ayudan y cosas que empeoran.',
@@ -165,6 +166,84 @@ function isSummaryIntent(message) {
   );
 }
 
+function isOutOfScopeIntent(message) {
+  const normalized = normalizeText(message);
+  const psychSignals = [
+    'emocion',
+    'emocional',
+    'sentir',
+    'siento',
+    'ansiedad',
+    'estres',
+    'triste',
+    'deprim',
+    'llorar',
+    'familia',
+    'padre',
+    'madre',
+    'mama',
+    'papa',
+    'pareja',
+    'hijo',
+    'hija',
+    'hermano',
+    'hermana',
+    'trauma',
+    'traumas',
+    'abuso',
+    'violencia',
+    'crisis',
+    'suicid',
+    'dormir',
+    'sueno',
+    'sueño',
+  ];
+  const offTopicSignals = [
+    'jugar',
+    'juego',
+    'juega',
+    'free fire',
+    'free firee',
+    'freefire',
+    'colombia juega',
+    'que dia juega',
+    'partido',
+    'futbol',
+    'baloncesto',
+    'tenis',
+    'formula 1',
+    'clima',
+    'temperatura',
+    'noticias',
+    'politica',
+    'politico',
+    'musica',
+    'cancion',
+    'pelicula',
+    'serie',
+    'videojuego',
+    'gaming',
+    'codigo',
+    'programar',
+    'matematic',
+    'tarea',
+    'examen',
+    'escuela',
+    'colegio',
+    'trabajo',
+  ];
+
+  if (psychSignals.some((signal) => normalized.includes(signal))) {
+    return false;
+  }
+
+  return offTopicSignals.some((signal) => normalized.includes(signal));
+}
+
+function buildOutOfScopeReply() {
+  return 'Oye, solo estoy para ayudarte con temas psicológicos, traumas y temas familiares. Si quieres, cuéntame cómo te sientes o qué te preocupa y ahí sí te acompaño.';
+}
+
 function summarizeMemoryLines(conversationMemory = '') {
   const lines = String(conversationMemory || '')
     .split('\n')
@@ -244,6 +323,10 @@ function buildSummaryReply(conversationContext = [], conversationMemory = '') {
 
 function buildFallbackReply(category, message, conversationContext = [], conversationMemory = '') {
   const normalized = normalizeText(message);
+  if (isOutOfScopeIntent(message)) {
+    return buildOutOfScopeReply();
+  }
+
   const wantsHumanSupport =
     normalized.includes('quiero hablar con una persona') ||
     normalized.includes('quiero hablar con alguien') ||
@@ -415,6 +498,18 @@ router.post('/triage', async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: 'GEMINI_API_KEY no está configurada' });
+    }
+
+    if (isOutOfScopeIntent(message)) {
+      return res.json({
+        category: 'general',
+        label: 'fuera de alcance',
+        reply: buildOutOfScopeReply(),
+        recommendedSpecialty: 'Bienestar emocional',
+        crisis: false,
+        memory: String(conversationMemory || '').trim(),
+        raw: { fallback: true, reason: 'Tema fuera de alcance' },
+      });
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
