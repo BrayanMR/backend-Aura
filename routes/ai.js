@@ -29,6 +29,7 @@ function buildPrompt(message, conversationContext = [], conversationMemory = '')
     '- recommendedSpecialty debe ser una especialidad de psicología útil para el caso.',
     '- memory debe ser un perfil persistente de este mismo usuario, no un resumen genérico.',
     '- memory debe incluir solo hechos estables y útiles: nombre o apodo si aparece, cómo prefiere ser tratado, temas recurrentes, contexto familiar/escolar/laboral, riesgos, cosas que ayudan y cosas que empeoran.',
+    '- si la memoria viene en formato estructurado tipo categoria|score|contenido, consérvala y actualízala en ese mismo formato.',
     '- memory no debe copiar el mensaje completo; debe guardar solo hechos, riesgos o contexto que sigan siendo útiles en el siguiente turno.',
     '- si ya existe una memoria previa, consérvala y súmale solo lo nuevo que sea realmente útil; no borres datos importantes anteriores.',
     '- si no hay datos nuevos, devuelve la misma memoria anterior sin rehacerla de forma innecesaria.',
