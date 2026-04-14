@@ -420,7 +420,7 @@ function buildFallbackReply(category, message, conversationContext = [], convers
     if (hasUsableContext(conversationContext, conversationMemory)) {
       return 'Hola. Te sigo el hilo; si quieres retomamos lo último que venías trabajando y vemos qué cambió hoy.';
     }
-    return 'Te leo. Cuéntame qué te trae por acá hoy y voy contigo paso a paso, sin responderte en automático.';
+    return 'Cuéntame qué te trae por acá hoy y voy contigo paso a paso. :)';
   }
 
   if (normalized.includes('mi papa') || normalized.includes('mi papá') || normalized.includes('mi mama') || normalized.includes('mi mamá') || normalized.includes('mis papás') || normalized.includes('mis papas')) {
