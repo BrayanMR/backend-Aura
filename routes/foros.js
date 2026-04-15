@@ -80,7 +80,7 @@ router.post('/', authMiddleware, async (req, res) => {
 // Body: { autor, texto }
 router.post('/:id/comentario', authMiddleware, async (req, res) => {
   try {
-    const { autor, texto } = req.body;
+    const { autor, texto, autorUid } = req.body;
     if (!autor || !texto) return res.status(400).json({ error: 'Se requieren autor y texto' });
 
     const docRef = getFirestore().collection('Publicaciones').doc(req.params.id);
@@ -88,7 +88,11 @@ router.post('/:id/comentario', authMiddleware, async (req, res) => {
     if (!doc.exists) return res.status(404).json({ error: 'Publicación no encontrada' });
 
     const comentarios = doc.data().Comentarios || [];
-    comentarios.push({ autor, texto, fecha: new Date().toISOString() });
+    const nuevoComentario = { autor, texto, fecha: new Date().toISOString() };
+    if (autorUid) {
+      nuevoComentario.autorUid = autorUid;
+    }
+    comentarios.push(nuevoComentario);
 
     await docRef.update({ Comentarios: comentarios });
     res.json({ updated: true, total_comentarios: comentarios.length });
