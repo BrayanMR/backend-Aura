@@ -12,7 +12,10 @@ router.get('/', async (req, res) => {
       .orderBy('Fecha_publicacion', 'desc')
       .get();
 
-    const publicaciones = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const publicaciones = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return { id: doc.id, ...data, comentarios: data.Comentarios || [] };
+    });
     res.json(publicaciones);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -41,7 +44,8 @@ router.get('/:id', async (req, res) => {
   try {
     const doc = await getFirestore().collection('Publicaciones').doc(req.params.id).get();
     if (!doc.exists) return res.status(404).json({ error: 'Publicación no encontrada' });
-    res.json({ id: doc.id, ...doc.data() });
+    const data = doc.data();
+    res.json({ id: doc.id, ...data, comentarios: data.Comentarios || [] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
