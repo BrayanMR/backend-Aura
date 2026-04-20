@@ -664,22 +664,6 @@ router.post('/triage', async (req, res) => {
     });
   }
 });
-    const message = String(req.body?.message || '');
-    const conversationContext = Array.isArray(req.body?.conversationContext)
-      ? req.body.conversationContext
-      : [];
-    const conversationMemory = String(req.body?.conversationMemory || '').trim();
-    const localCategory = detectLocalCategory(message);
-    console.error('[AI][TRIAGE][FALLBACK]', error.message);
-    return res.json({
-      category: localCategory,
-      label: localCategory === 'general' ? 'orientación general' : localCategory,
-      reply: buildFallbackReply(localCategory, message, conversationContext, conversationMemory),
-      recommendedSpecialty: localCategory === 'crisis' ? 'Crisis y contención' : 'Bienestar emocional',
-      crisis: localCategory === 'crisis',
-      memory: conversationMemory,
-      raw: { fallback: true, error: error.message },
-    });
 
 // Ruta temporal para listar modelos disponibles de Gemini
 router.get('/list-gemini-models', async (req, res) => {
