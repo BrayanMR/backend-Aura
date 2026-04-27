@@ -1,15 +1,33 @@
 const express = require('express');
 const router  = express.Router();
 const { getAuth } = require('../config/firebase');
+const { getFirestore } = require('../config/firebase');
+const authMiddleware = require('../middleware/auth');
 
 // ── Crear usuario ──────────────────────────────────────────────────────────────
 // POST /api/auth/register
-// Body: { email, password, displayName? }
+// Body: { email, password, displayName?, nombre?, apellido?, documento?, role? }
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, displayName } = req.body;
+    const { email, password, displayName, nombre, apellido, documento, role } = req.body;
     const user = await getAuth().createUser({ email, password, displayName });
-    res.status(201).json({ uid: user.uid, email: user.email, displayName: user.displayName });
+    
+    // Guardar información adicional en Firestore
+    const userData = {
+      uid: user.uid,
+      email: user.email,
+      displayName: displayName || user.displayName || '',
+      nombre: nombre || '',
+      apellido: apellido || '',
+      documento: documento || '',
+      role: role || 'usuario',
+      activo: true,
+      createdAt: new Date().toISOString(),
+    };
+    
+    await getFirestore().collection('usuarios').doc(user.uid).set(userData);
+    
+    res.status(201).json(userData);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -59,6 +77,22 @@ router.post('/verify-token', async (req, res) => {
     res.json({ uid: decoded.uid, email: decoded.email });
   } catch (error) {
     res.status(401).json({ error: 'Token inválido o expirado' });
+  }
+});
+
+// ── Obtener datos del usuario autenticado ─────────────────────────────────────────
+// GET /api/auth/me
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    const uid = req.user?.uid;
+    if (!uid) return res.status(401).json({ error: 'No autenticado' });
+
+    const doc = await getFirestore().collection('usuarios').doc(uid).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    res.json({ uid, ...doc.data() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
