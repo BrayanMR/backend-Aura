@@ -18,6 +18,9 @@ function buildPrompt(message, conversationContext = [], conversationMemory = '')
     '- Si tienes contexto previo, utilízalo para no repetir preguntas ni repetir el mismo tema.',
     '- Si el usuario menciona un nombre, una profesión o un hobby, guárdalo en memory si es estable.',
     '- Si no hay memoria útil, pon memory como cadena vacía.',
+    '- Si hay datos personales estables en memoria (nombre, profesión, hobby, situación familiar, riesgo), úsalos para que el reply suene más cercano y personalizado.',
+    '- Si conoces el nombre del usuario, inclúyelo en la respuesta de forma natural y cálida, sin sonar forzado.',
+    '- Si tienes contexto previo, utilízalo para no repetir preguntas ni repetir el mismo tema.',
     '- Si has dado una orientación en el turno anterior, aporta un siguiente paso concreto o una pregunta de seguimiento suave.',
     '- recommendedSpecialty debe ser clara y específica cuando el caso lo permita.',
     '- No repitas el mensaje del usuario ni lo reformules textualmente.',
@@ -45,6 +48,8 @@ function buildPrompt(message, conversationContext = [], conversationMemory = '')
     '- Usa el contexto reciente para responder con criterio y continuidad.',
     '- recommendedSpecialty debe ser una especialidad de psicología útil.',
     '- memory debe ser un texto breve o vacío si no hay datos previos, e incluir hechos estables: nombre, profesión, hobbies, contexto familiar, riesgos.',
+    '- Si se añade algo nuevo importante, actualiza la memoria sin repetir información obsoleta.',
+    '- Escribe la memoria en líneas separadas como hechos cortos: "Nombre: Ana", "Profesión: estudiante", "Vive con mamá".',
     '',
     conversationMemory ? `Memoria persistente actual:\n${conversationMemory}` : 'Memoria persistente actual: vacía.',
     '',
@@ -692,4 +697,3 @@ router.get('/list-gemini-models', async (req, res) => {
 });
 
 module.exports = router;
-
