@@ -670,13 +670,12 @@ router.post('/triage', async (req, res) => {
     });
   } catch (error) {
     const processingTime = Date.now() - startTime;
-    console.error('Error en triage:', error);
     const message = error && error.message ? error.message : String(error);
+    console.error('Error en triage:', message);
+    if (error && error.stack) console.error(error.stack);
     return res.status(500).json({ 
-      error: process.env.NODE_ENV === 'development'
-        ? `Error interno del servidor: ${message}`
-        : 'Error interno del servidor',
-      details: process.env.NODE_ENV === 'development' ? message : undefined,
+      error: `Error interno del servidor: ${message}`,
+      details: message,
       metrics: {
         confidence: 0.0,
         processingTime,
