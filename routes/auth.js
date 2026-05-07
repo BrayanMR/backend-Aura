@@ -25,7 +25,14 @@ router.post('/register', async (req, res) => {
       createdAt: new Date().toISOString(),
     };
     
-    await getFirestore().collection('usuarios').doc(user.uid).set(userData);
+    try {
+      await getFirestore().collection('usuarios').doc(user.uid).set(userData);
+    } catch (firestoreError) {
+      // Si falla Firestore, eliminar el usuario de Auth (rollback)
+      console.error('❌ Error guardando en Firestore, haciendo rollback:', firestoreError.message);
+      await getAuth().deleteUser(user.uid);
+      throw firestoreError;
+    }
     
     res.status(201).json(userData);
   } catch (error) {
