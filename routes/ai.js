@@ -146,8 +146,12 @@ function hasUsableContext(conversationContext = [], conversationMemory = '') {
   const memory = String(conversationMemory || '').trim();
   if (memory.length >= 12) return true;
   if (!Array.isArray(conversationContext)) return false;
+
   return conversationContext.some((entry) => {
-    const text = String((entry && entry.text) || '').trim();
+    if (!entry || typeof entry.text !== 'string') return false;
+    const role = String(entry.role || '').toLowerCase();
+    if (role && role !== 'user') return false;
+    const text = entry.text.trim();
     return text.length >= 8;
   });
 }
@@ -521,6 +525,14 @@ router.post('/triage', async (req, res) => {
   const startTime = Date.now();
   try {
     const { message, conversationContext, conversationMemory } = req.body;
+    const authHeader = req.headers.authorization || 'none';
+    console.log('[AI-TRIAGE] request', {
+      authStartsWithBearer: String(authHeader).startsWith('Bearer '),
+      messageLength: String(message || '').length,
+      contextSize: Array.isArray(conversationContext) ? conversationContext.length : 0,
+      memorySize: String(conversationMemory || '').length,
+    });
+
     if (!message || !String(message).trim()) {
       return res.status(400).json({ error: 'Falta el mensaje' });
     }
