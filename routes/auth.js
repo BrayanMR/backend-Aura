@@ -3,6 +3,7 @@ const router  = express.Router();
 const { getAuth } = require('../config/firebase');
 const { getFirestore } = require('../config/firebase');
 const authMiddleware = require('../middleware/auth');
+const jwt = require('jsonwebtoken');
 
 // ── Crear usuario ──────────────────────────────────────────────────────────────
 // POST /api/auth/register
@@ -33,8 +34,14 @@ router.post('/register', async (req, res) => {
       await getAuth().deleteUser(user.uid);
       throw firestoreError;
     }
-    
-    res.status(201).json(userData);
+
+    const token = jwt.sign(
+      { uid: user.uid, email: user.email },
+      process.env.JWT_SECRET || 'mi_clave_secreta',
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({ ...userData, token });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -119,8 +126,6 @@ router.post('/custom-token', async (req, res) => {
 // ── Login ──────────────────────────────────────────────────────────────────
 // POST /api/auth/login
 // Body: { email, password }
-
-const jwt = require('jsonwebtoken');
 
 router.post('/login', async (req, res) => {
   try {
