@@ -1,6 +1,9 @@
 const express = require('express');
 const router  = express.Router();
 const { getFirestore } = require('../config/firebase');
+const authMiddleware = require('../middleware/auth');
+
+router.use(authMiddleware);
 
 // ── Obtener colección ──────────────────────────────────────────────────────────
 // GET /api/firestore/:collection
