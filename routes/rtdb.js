@@ -1,6 +1,9 @@
 const express = require('express');
 const router  = express.Router();
 const { getRTDB } = require('../config/firebase');
+const authMiddleware = require('../middleware/auth');
+
+router.use(authMiddleware);
 
 // ── Leer nodo ──────────────────────────────────────────────────────────────────
 // GET /api/rtdb/*path   ej: /api/rtdb/usuarios/abc123
@@ -67,3 +70,4 @@ router.delete('/*', async (req, res) => {
 });
 
 module.exports = router;
+
