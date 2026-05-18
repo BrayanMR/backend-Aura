@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { OpenAI } = require('openai');
 const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
@@ -537,9 +537,9 @@ router.post('/triage', async (req, res) => {
       return res.status(400).json({ error: 'Falta el mensaje' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY no está configurada' });
+      return res.status(500).json({ error: 'GROQ_API_KEY no está configurada' });
     }
 
     if (isOutOfScopeIntent(message)) {
@@ -566,19 +566,20 @@ router.post('/triage', async (req, res) => {
       });
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ 
-  model: 'gemini-2.5-flash' 
-});
+    const client = new OpenAI({
+      apiKey,
+      baseURL: 'https://api.groq.com/openai/v1',
+    });
     const incomingMemory = String(conversationMemory || '').trim();
-    const result = await model.generateContent(
-      buildPrompt(
+    const response = await client.responses.create({
+      model: 'openai/gpt-oss-20b',
+      input: buildPrompt(
         String(message),
         Array.isArray(conversationContext) ? conversationContext : [],
         incomingMemory,
       ),
-    );
-    const text = result.response.text();
+    });
+    const text = String(response.output_text || response.output?.[0]?.content?.[0]?.text || '');
 
     let parsed;
     try {
@@ -616,7 +617,7 @@ router.post('/triage', async (req, res) => {
           processingTime,
           sentimentScore: localCategory === 'crisis' ? -0.7 : 0.0
         },
-        raw: { fallback: true, reason: 'Gemini no devolvió JSON válido' },
+        raw: { fallback: true, reason: 'Groq no devolvió JSON válido' },
       });
     }
 
@@ -697,15 +698,18 @@ router.post('/triage', async (req, res) => {
   }
 });
 
-// Ruta temporal para listar modelos disponibles de Gemini
-router.get('/list-gemini-models', async (req, res) => {
+// Ruta temporal para listar modelos disponibles de Groq
+router.get('/list-groq-models', async (req, res) => {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY no está configurada' });
+      return res.status(500).json({ error: 'GROQ_API_KEY no está configurada' });
     }
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const models = await genAI.listModels();
+    const client = new OpenAI({
+      apiKey,
+      baseURL: 'https://api.groq.com/openai/v1',
+    });
+    const models = await client.models.list();
     res.json(models);
   } catch (error) {
     res.status(500).json({ error: error.message });
