@@ -1,63 +1,78 @@
 const express = require('express');
 const router = express.Router();
-const { OpenAI } = require('openai');
+const OpenAI = require('openai');
 const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
 
-function buildPrompt(message, conversationContext = [], conversationMemory = '') {
+const SYSTEM_PROMPT = `Eres Aura, un asistente de apoyo emocional avanzado y con Inteligencia Artificial para una aplicación móvil de salud mental. Tu objetivo es proporcionar acompañamiento empático, contención y orientación psicológica básica de manera cálida, humana e inteligente.
+
+Reglas clave para tu comportamiento y tono:
+1. TONO HUMANO Y CÁLIDO: Habla con cercanía y empatía, como un amigo comprensivo o un psicólogo clínico en su primera sesión de contención. Evita a toda costa sonar robótico, clínico en exceso, dar respuestas de plantilla o usar frases repetitivas.
+2. PERSONALIZACIÓN NATURAL: Si conoces el nombre del usuario (por ejemplo, a través de la memoria persistente), inclúyelo en tus respuestas de forma natural y espontánea (ej: "Entiendo, Brayan..." o "Siento mucho que pases por eso, Ana..."). No abuses del nombre, úsalo donde sume calidez.
+3. SEGUIMIENTO ACTIVO: Analiza el contexto de los últimos mensajes. Si el usuario te responde sobre algo que le sugeriste o te da continuidad, no ignores lo que te ha dicho. Haz preguntas de seguimiento suaves y lógicas, y ofrece pequeños pasos prácticos aplicables a su vida diaria.
+4. DETECCION DE CRISIS: Si detectas que el usuario menciona ideas de suicidio, autolesión, abuso físico, violencia familiar inmediata o peligro inminente, debes clasificar la conversación como crisis ("crisis": true, "category": "crisis"). Responde con extrema compasión y seriedad, priorizando siempre su integridad y guiándolo directamente a buscar ayuda de emergencia o de personas de confianza en su entorno.
+
+MEMORIA PERSISTENTE:
+- Se te proporcionará una lista de hechos estables sobre el usuario (nombre, profesión, hobbies, situación familiar, relaciones, preocupaciones crónicas, fobias, etc.) recopilados en conversaciones anteriores.
+- Si en el mensaje actual el usuario comparte un nuevo dato personal estable e importante (ej. "tengo insomnio los domingos", "estudio programación en el SENA", "discutí con mi novio"), debes integrarlo a la memoria.
+- Devuelve la memoria completa y actualizada en formato de lista de hechos cortos, cada uno en una línea separada por salto de línea (\\n) (ej. "Nombre: Brayan\\nProfesión: Programador SENA\\nSufre de insomnio los domingos").
+- Mantén la memoria en tercera persona. Elimina información redundante u obsoleta si entra en contradicción con hechos nuevos. Si no hay memoria relevante previa ni nueva, mantén el campo vacío o como estaba.
+
+RAZONAMIENTO INTERNO (Chain of Thought):
+- Debes incluir tu razonamiento clínico e interno en el campo "reasoning". Aquí analizarás qué emoción está sintiendo el usuario, si hay algún patrón recurrente, qué hechos nuevos has aprendido para actualizar la memoria y por qué decides dar la respuesta empática que has redactado. Esto te obliga a pensar antes de responder.
+
+FORMATO DE SALIDA:
+Debes responder ÚNICAMENTE con un objeto JSON válido que cumpla con la estructura de abajo. No incluyas bloques de código markdown (\`\`\`json) ni texto adicional fuera del JSON.
+
+Esquema JSON esperado:
+{
+  "reasoning": "Razonamiento paso a paso sobre el estado del usuario, la evolución de la conversación, los datos estables aprendidos y la estrategia de contención empleada.",
+  "category": "crisis|ansiedad|estres|tristeza|familiar|sueno|general",
+  "label": "breve etiqueta de dos o tres palabras en minúsculas sobre el tema tratado (ej: 'ansiedad por examen', 'pelea con hermano', 'tristeza por ruptura')",
+  "reply": "Tu respuesta empática, natural y personalizada en español.",
+  "recommendedSpecialty": "Especialidad sugerida (ej: 'Psicoterapia Cognitivo-Conductual', 'Terapia Dialéctica Conductual', 'Terapia de Pareja y Familia')",
+  "crisis": true|false,
+  "memory": "Texto con la memoria persistente de hechos actualizada, separada por saltos de línea \\n.",
+  "emotions": {
+    "primary": "alegria|tristeza|ira|miedo|ansiedad|culpa|vergüenza|soledad|esperanza|frustracion|confianza|desesperanza|neutral",
+    "intensity": 0.1,
+    "secondary": "emocion o null"
+  },
+  "therapies": [
+    {
+      "name": "CBT|DBT|EMDR|ACT|MBCT|Gestalt|Humanista|etc",
+      "description": "Breve explicación en español de por qué es adecuada esta terapia para el caso particular",
+      "suitability": 0.8
+    }
+  ],
+  "metrics": {
+    "confidence": 0.95,
+    "sentimentScore": -0.8
+  }
+}`;
+
+function buildUserPrompt(message, conversationContext = [], conversationMemory = '') {
   const contextLines = renderConversationContext(conversationContext);
-  return [
-    'Eres un asistente de apoyo emocional avanzado para una app de ayuda psicológica.',
-    'Analiza el mensaje del usuario y responde SOLO con JSON válido, sin markdown ni texto adicional.',
-    'Formato exacto:',
-    '{"category":"crisis|ansiedad|estres|tristeza|familiar|sueno|general","label":"texto corto","reply":"respuesta empatica en español","recommendedSpecialty":"texto corto","crisis":true|false,"memory":"texto corto o vacío","emotions":{"primary":"alegria|tristeza|ira|miedo|ansiedad|culpa|vergüenza|soledad|esperanza|frustracion|confianza|desesperanza","intensity":0.1-1.0,"secondary":"emocion opcional"},"therapies":[{"name":"CBT|DBT|EMDR|ACT|MBCT|etc","description":"breve descripcion","suitability":0.1-1.0}],"metrics":{"confidence":0.1-1.0,"processingTime":0,"sentimentScore":-1.0-1.0}}',
-    'Reglas de estilo:',
-    '- reply debe ser breve, empático y sonar como un amigo comprensivo.',
-    '- Usa un tono humano, no robótico, y evita respuestas que suenen como plantillas.',
-    '- Si tienes contexto previo, utilízalo para no repetir preguntas ni repetir el mismo tema.',
-    '- Si el usuario menciona un nombre, una profesión o un hobby, guárdalo en memory si es estable.',
-    '- Si no hay memoria útil, pon memory como cadena vacía.',
-    '- Si hay datos personales estables en memoria (nombre, profesión, hobby, situación familiar, riesgo), úsalos para que el reply suene más cercano y personalizado.',
-    '- Si conoces el nombre del usuario, inclúyelo en la respuesta de forma natural y cálida, sin sonar forzado. Por ejemplo: "Entiendo, Alejita...".',
-    '- Si la memoria contiene un hobby, una profesión o una situación familiar, mencionalo con respeto como parte de tu acompañamiento.',
-    '- Si tienes contexto previo, utilízalo para no repetir preguntas ni repetir el mismo tema.',
-    '- Si has dado una orientación en el turno anterior, aporta un siguiente paso concreto o una pregunta de seguimiento suave.',
-    '- recommendedSpecialty debe ser clara y específica cuando el caso lo permita.',
-    '- No repitas el mensaje del usuario ni lo reformules textualmente.',
-    'Ejemplo de salida válida:',
-    '{"category":"tristeza","label":"sentimientos de tristeza","reply":"Siento que esto te pesa. Si quieres, cuéntame qué fue lo más difícil para que lo miremos juntos.","recommendedSpecialty":"Terapia Cognitivo-Conductual","crisis":false,"memory":"Nombre: Ana; Profesión: estudiante","emotions":{"primary":"tristeza","intensity":0.7,"secondary":"soledad"},"therapies":[{"name":"CBT","description":"Terapia Cognitivo-Conductual para trabajar pensamientos y emociones","suitability":0.8}],"metrics":{"confidence":0.85,"processingTime":0,"sentimentScore":-0.5}}',
-    'Reglas de análisis de sentimientos:',
-    '- emotions.primary: emoción principal detectada (alegria, tristeza, ira, miedo, ansiedad, culpa, vergüenza, soledad, esperanza, frustracion, confianza, desesperanza)',
-    '- emotions.intensity: intensidad de la emoción (0.1=baja, 1.0=muy alta)',
-    '- emotions.secondary: emoción secundaria opcional si aplica',
-    '- metrics.sentimentScore: puntuación de sentimiento general (-1.0=muy negativo, 1.0=muy positivo)',
-    '- metrics.confidence: confianza en el análisis (0.1-1.0)',
-    '- metrics.processingTime: tiempo estimado de procesamiento en ms',
-    '',
-    'Reglas de terapias específicas:',
-    '- therapies: array de terapias recomendadas (máximo 3)',
-    '- Cada terapia debe incluir: name, description, suitability (0.1-1.0)',
-    '- Terapias disponibles: CBT (Terapia Cognitivo-Conductual), DBT (Terapia Dialéctica Conductual), EMDR (Desensibilización y Reprocesamiento por Movimientos Oculares), ACT (Terapia de Aceptación y Compromiso), MBCT (Terapia Cognitiva Basada en Mindfulness), IPT (Terapia Interpersonal), EFT (Terapia Centrada en Emociones), Gestalt, Psicodinámica, Humanista',
-    '- suitability: qué tan adecuada es la terapia para este caso específico',
-    '',
-    'Reglas generales:',
-    '- Si detectas riesgo de autolesión, suicidio o peligro inmediato, category debe ser crisis y crisis=true.',
-    '- reply debe sonar como una persona que acompaña, no como una plantilla.',
-    '- reply debe ser breve, empática, concreta y en español natural.',
-    '- No repitas ni paraphrasees literalmente el mensaje del usuario.',
-    '- Usa el contexto reciente para responder con criterio y continuidad.',
-    '- recommendedSpecialty debe ser una especialidad de psicología útil.',
-    '- memory debe ser un texto breve o vacío si no hay datos previos, e incluir hechos estables: nombre, profesión, hobbies, contexto familiar, riesgos.',
-    '- Si se añade algo nuevo importante, actualiza la memoria sin repetir información obsoleta.',
-    '- Escribe la memoria en líneas separadas como hechos cortos: "Nombre: Ana", "Profesión: estudiante", "Vive con mamá".',
-    '',
-    conversationMemory ? `Memoria persistente actual:\n${conversationMemory}` : 'Memoria persistente actual: vacía.',
-    '',
-    contextLines ? `Contexto reciente:\n${contextLines}` : 'Contexto reciente: sin contexto adicional.',
-    '',
-    `Mensaje del usuario: ${message}`,
-  ].join('\n');
+  const parts = [];
+  
+  if (conversationMemory) {
+    parts.push(`[MEMORIA PERSISTENTE ACTUAL]\n${conversationMemory}`);
+  } else {
+    parts.push('[MEMORIA PERSISTENTE ACTUAL]\nVacía.');
+  }
+  
+  if (contextLines) {
+    parts.push(`[CONTEXTO DE LA CONVERSACIÓN RECIENTE]\n${contextLines}`);
+  } else {
+    parts.push('[CONTEXTO DE LA CONVERSACIÓN RECIENTE]\nSin contexto previo.');
+  }
+  
+  parts.push(`[MENSAJE ACTUAL DEL USUARIO]\n${message}`);
+  
+  parts.push(`Por favor, analiza el mensaje actual del usuario considerando la memoria y el contexto reciente. Responde ÚNICAMENTE en el formato JSON estructurado solicitado, asegurándote de actualizar la memoria de forma adecuada y escribir un razonamiento profundo en el campo 'reasoning'.`);
+  
+  return parts.join('\n\n');
 }
 
 function renderConversationContext(conversationContext) {
@@ -66,17 +81,17 @@ function renderConversationContext(conversationContext) {
   }
 
   return conversationContext
-    .slice(-6)
+    .slice(-8)
     .map((entry) => {
       if (entry && typeof entry === 'object') {
-        const role = String(entry.role || 'unknown').toLowerCase();
-        const text = String(entry.text || '').trim();
+        const role = String(entry.role || entry.autor || 'unknown').toLowerCase();
+        const text = String(entry.text || entry.texto || '').trim();
         if (!text) return '';
-        return `${role}: ${text}`;
+        return `${role === 'assistant' || role === 'ia' ? 'asistente' : 'usuario'}: ${text}`;
       }
 
       const text = String(entry || '').trim();
-      return text ? `message: ${text}` : '';
+      return text ? `mensaje: ${text}` : '';
     })
     .filter(Boolean)
     .join('\n');
@@ -148,10 +163,10 @@ function hasUsableContext(conversationContext = [], conversationMemory = '') {
   if (!Array.isArray(conversationContext)) return false;
 
   return conversationContext.some((entry) => {
-    if (!entry || typeof entry.text !== 'string') return false;
-    const role = String(entry.role || '').toLowerCase();
-    if (role && role !== 'user') return false;
-    const text = entry.text.trim();
+    if (!entry) return false;
+    const text = String(entry.text || entry.texto || '').trim();
+    const role = String(entry.role || entry.autor || '').toLowerCase();
+    if (role && role !== 'user' && role !== 'usuario') return false;
     return text.length >= 8;
   });
 }
@@ -175,8 +190,6 @@ function isSummaryIntent(message) {
     normalized.includes('resumen') ||
     normalized.includes('resumir') ||
     normalized.includes('resumeme') ||
-    normalized.includes('resumeme') ||
-    normalized.includes('resumeme') ||
     normalized.includes('hazme un resumen') ||
     normalized.includes('resume lo que') ||
     normalized.includes('que te conte') ||
@@ -187,68 +200,16 @@ function isSummaryIntent(message) {
 function isOutOfScopeIntent(message) {
   const normalized = normalizeText(message);
   const psychSignals = [
-    'emocion',
-    'emocional',
-    'sentir',
-    'siento',
-    'ansiedad',
-    'estres',
-    'triste',
-    'deprim',
-    'llorar',
-    'familia',
-    'padre',
-    'madre',
-    'mama',
-    'papa',
-    'pareja',
-    'hijo',
-    'hija',
-    'hermano',
-    'hermana',
-    'trauma',
-    'traumas',
-    'abuso',
-    'violencia',
-    'crisis',
-    'suicid',
-    'dormir',
-    'sueno',
-    'sueño',
+    'emocion', 'emocional', 'sentir', 'siento', 'ansiedad', 'estres', 'triste', 'deprim', 'llorar',
+    'familia', 'padre', 'madre', 'mama', 'papa', 'pareja', 'hijo', 'hija', 'hermano', 'hermana',
+    'trauma', 'traumas', 'abuso', 'violencia', 'crisis', 'suicid', 'dormir', 'sueno', 'sueño',
+    'nombre', 'llamo', 'soy', 'me llamo', 'como me llamo', 'recorda', 'recuerda', 'quien soy'
   ];
   const offTopicSignals = [
-    'jugar',
-    'juego',
-    'juega',
-    'free fire',
-    'free firee',
-    'freefire',
-    'colombia juega',
-    'que dia juega',
-    'partido',
-    'futbol',
-    'baloncesto',
-    'tenis',
-    'formula 1',
-    'clima',
-    'temperatura',
-    'noticias',
-    'politica',
-    'politico',
-    'musica',
-    'cancion',
-    'pelicula',
-    'serie',
-    'videojuego',
-    'gaming',
-    'codigo',
-    'programar',
-    'matematic',
-    'tarea',
-    'examen',
-    'escuela',
-    'colegio',
-    'trabajo',
+    'jugar', 'juego', 'juega', 'free fire', 'free firee', 'freefire', 'colombia juega', 'que dia juega',
+    'partido', 'futbol', 'baloncesto', 'tenis', 'formula 1', 'clima', 'temperatura', 'noticias',
+    'politica', 'politico', 'musica', 'cancion', 'pelicula', 'serie', 'videojuego', 'gaming',
+    'codigo', 'programar', 'matematic', 'tarea', 'examen', 'escuela', 'colegio', 'trabajo'
   ];
 
   if (psychSignals.some((signal) => normalized.includes(signal))) {
@@ -273,25 +234,16 @@ function pickVariant(options, seed = '') {
   return options[hash % options.length];
 }
 
-function summarizeMemoryLines(conversationMemory = '') {
-  const lines = String(conversationMemory || '')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !line.toLowerCase().startsWith('perfil:'));
-
-  return lines.slice(0, 3).join('; ');
-}
-
 function summarizeRecentUserContext(conversationContext = []) {
   if (!Array.isArray(conversationContext)) return '';
 
   const userMessages = conversationContext
     .filter((entry) => {
-      const role = String((entry && entry.role) || '').toLowerCase();
-      return role === 'user';
+      if (!entry) return false;
+      const role = String(entry.role || entry.autor || '').toLowerCase();
+      return role === 'user' || role === 'usuario';
     })
-    .map((entry) => String((entry && entry.text) || '').trim())
+    .map((entry) => String(entry.text || entry.texto || '').trim())
     .filter(Boolean);
 
   const filteredMessages = userMessages.filter((msg) => !isSummaryIntent(msg));
@@ -336,7 +288,7 @@ function buildSummaryReply(conversationContext = [], conversationMemory = '') {
     : 'Sí, me acuerdo de lo que venimos hablando.';
 
   if (!memorySummary && !contextSummary) {
-    return 'Puedo resumirte mejor si me dices de cuál parte quieres el resumen: lo familiar, cómo te has sentido, o lo último que hablamos .';
+    return 'Puedo resumirte mejor si me dices de cuál parte quieres el resumen: lo familiar, cómo te has sentido, o lo último que hablamos.';
   }
 
   if (memorySummary && contextSummary) {
@@ -449,10 +401,6 @@ function buildFallbackReply(category, message, conversationContext = [], convers
     return 'Lo que pasa en tu casa suena duro. Si quieres, dime qué ocurrió primero y qué es lo que más te pesa ahora para ayudarte a ordenar el siguiente paso.';
   }
 
-  if (wantsHumanSupport) {
-    return 'Claro, te acompaño y te conecto con apoyo humano. Si quieres, seguimos por aquí mientras preparo la derivación.';
-  }
-
   return pickVariant([
     'Te leo. Cuéntame un poco más de lo que pasó y te respondo con algo más útil y directo.',
     'Estoy contigo. Si me das un poco más de contexto, te respondo de forma más concreta.',
@@ -485,7 +433,6 @@ function detectLocalCategory(message) {
   }
 
   if (
-    normalized.includes('estres') ||
     normalized.includes('estres') ||
     normalized.includes('agotado') ||
     normalized.includes('presion') ||
@@ -523,14 +470,16 @@ function detectLocalCategory(message) {
 
 router.post('/triage', async (req, res) => {
   const startTime = Date.now();
+  const { message, conversationContext, conversationMemory } = req.body;
+  const incomingMemory = String(conversationMemory || '').trim();
+
   try {
-    const { message, conversationContext, conversationMemory } = req.body;
     const authHeader = req.headers.authorization || 'none';
-    console.log('[AI-TRIAGE] request', {
+    console.log('[AI-TRIAGE] Request received:', {
       authStartsWithBearer: String(authHeader).startsWith('Bearer '),
       messageLength: String(message || '').length,
       contextSize: Array.isArray(conversationContext) ? conversationContext.length : 0,
-      memorySize: String(conversationMemory || '').length,
+      memorySize: incomingMemory.length,
     });
 
     if (!message || !String(message).trim()) {
@@ -539,7 +488,8 @@ router.post('/triage', async (req, res) => {
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'GROQ_API_KEY no está configurada' });
+      console.warn('[AI-TRIAGE] Warning: GROQ_API_KEY is not configured in environment.');
+      return res.status(500).json({ error: 'GROQ_API_KEY no está configurada en el servidor' });
     }
 
     if (isOutOfScopeIntent(message)) {
@@ -550,7 +500,7 @@ router.post('/triage', async (req, res) => {
         reply: buildOutOfScopeReply(),
         recommendedSpecialty: 'Bienestar emocional',
         crisis: false,
-        memory: String(conversationMemory || '').trim(),
+        memory: incomingMemory,
         emotions: {
           primary: 'neutral',
           intensity: 0.3,
@@ -563,44 +513,61 @@ router.post('/triage', async (req, res) => {
           sentimentScore: 0.0
         },
         raw: { fallback: true, reason: 'Tema fuera de alcance' },
+        isFallback: true
       });
     }
 
+    // Inicializar cliente de OpenAI apuntando a Groq
     const client = new OpenAI({
-      apiKey,
+      apiKey: apiKey,
       baseURL: 'https://api.groq.com/openai/v1',
     });
-    const incomingMemory = String(conversationMemory || '').trim();
-    const response = await client.responses.create({
-      model: 'openai/gpt-oss-20b',
-      input: buildPrompt(
-        String(message),
-        Array.isArray(conversationContext) ? conversationContext : [],
-        incomingMemory,
-      ),
+
+    const userPrompt = buildUserPrompt(
+      String(message),
+      Array.isArray(conversationContext) ? conversationContext : [],
+      incomingMemory
+    );
+
+    const modelName = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+    console.log(`[AI-TRIAGE] Querying model: ${modelName}`);
+
+    const chatCompletion = await client.chat.completions.create({
+      model: modelName,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.7,
+      max_tokens: 1024
     });
-    const text = String(response.output_text || response.output?.[0]?.content?.[0]?.text || '');
+
+    const text = chatCompletion.choices[0].message.content;
+    console.log('[AI-TRIAGE] Received response text length:', text.length);
 
     let parsed;
     try {
       parsed = safeParseJson(text);
-    } catch (_) {
+    } catch (parseError) {
+      console.error('[AI-TRIAGE] Error parsing JSON from Groq response:', parseError);
       parsed = null;
     }
 
     const processingTime = Date.now() - startTime;
 
     if (!parsed || typeof parsed !== 'object') {
+      console.warn('[AI-TRIAGE] Falling back to local deterministic output due to invalid JSON from LLM.');
       const localCategory = detectLocalCategory(message);
       return res.json({
         category: localCategory,
         label: localCategory === 'general' ? 'orientación general' : localCategory,
-          reply: buildFallbackReply(
-            localCategory,
-            String(message),
-            Array.isArray(conversationContext) ? conversationContext : [],
-            incomingMemory,
-          ),
+        reply: buildFallbackReply(
+          localCategory,
+          String(message),
+          Array.isArray(conversationContext) ? conversationContext : [],
+          incomingMemory,
+        ),
         recommendedSpecialty: localCategory === 'crisis' ? 'Crisis y contención' : 'Bienestar emocional',
         crisis: localCategory === 'crisis',
         memory: incomingMemory,
@@ -618,6 +585,7 @@ router.post('/triage', async (req, res) => {
           sentimentScore: localCategory === 'crisis' ? -0.7 : 0.0
         },
         raw: { fallback: true, reason: 'Groq no devolvió JSON válido' },
+        isFallback: true
       });
     }
 
@@ -630,7 +598,7 @@ router.post('/triage', async (req, res) => {
     const crisis = crisisValue === true || crisisValue === 'true' || crisisValue === 1 || crisisValue === '1';
     const summaryIntent = isSummaryIntent(String(message));
 
-    // Análisis de sentimientos con valores por defecto
+    // Validar emociones
     const emotions = parsed.emotions || {};
     const emotionsResult = {
       primary: String(emotions.primary || 'neutral').trim(),
@@ -638,14 +606,14 @@ router.post('/triage', async (req, res) => {
       secondary: emotions.secondary ? String(emotions.secondary).trim() : null
     };
 
-    // Terapias recomendadas con validación
+    // Validar terapias recomendadas
     const therapies = Array.isArray(parsed.therapies) ? parsed.therapies.slice(0, 3).map(therapy => ({
       name: String(therapy.name || 'CBT').trim(),
       description: String(therapy.description || 'Terapia recomendada').trim(),
       suitability: Math.max(0.1, Math.min(1.0, parseFloat(therapy.suitability) || 0.5))
     })) : [{ name: 'CBT', description: 'Terapia Cognitivo-Conductual', suitability: 0.6 }];
 
-    // Métricas de efectividad
+    // Validar métricas de efectividad
     const metrics = parsed.metrics || {};
     const metricsResult = {
       confidence: Math.max(0.1, Math.min(1.0, parseFloat(metrics.confidence) || 0.7)),
@@ -680,25 +648,45 @@ router.post('/triage', async (req, res) => {
       therapies,
       metrics: metricsResult,
       raw: parsed,
+      isFallback: false
     });
   } catch (error) {
     const processingTime = Date.now() - startTime;
-    const message = error && error.message ? error.message : String(error);
-    console.error('Error en triage:', message);
+    const errorMsg = error && error.message ? error.message : String(error);
+    console.error('[AI-TRIAGE] Error in /triage handler:', errorMsg);
     if (error && error.stack) console.error(error.stack);
-    return res.status(500).json({ 
-      error: `Error interno del servidor: ${message}`,
-      details: message,
+
+    const localCategory = detectLocalCategory(message);
+    return res.json({
+      category: localCategory,
+      label: 'error de backend',
+      reply: buildFallbackReply(
+        localCategory,
+        String(message),
+        Array.isArray(conversationContext) ? conversationContext : [],
+        incomingMemory,
+      ),
+      recommendedSpecialty: 'Bienestar emocional',
+      crisis: localCategory === 'crisis',
+      memory: incomingMemory,
+      emotions: {
+        primary: 'neutral',
+        intensity: 0.3,
+        secondary: null
+      },
+      therapies: [],
       metrics: {
         confidence: 0.0,
         processingTime,
         sentimentScore: 0.0
-      }
+      },
+      raw: { error: true, details: errorMsg },
+      isFallback: true
     });
   }
 });
 
-// Ruta temporal para listar modelos disponibles de Groq
+// Listar modelos disponibles de Groq
 router.get('/list-groq-models', async (req, res) => {
   try {
     const apiKey = process.env.GROQ_API_KEY;
@@ -717,3 +705,4 @@ router.get('/list-groq-models', async (req, res) => {
 });
 
 module.exports = router;
+
